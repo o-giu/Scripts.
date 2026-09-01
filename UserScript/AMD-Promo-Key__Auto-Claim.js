@@ -1,12 +1,12 @@
 // ==UserScript==
-// @name        AMD Promo-Key Auto-Claim
+// @name        AMD Key Auto-Claim
+// @match       https://www.amdgaming.com/
 // @match       https://www.amdgaming.com/promotions
 // @match       https://www.amdgaming.com/promotions/
 // @match       https://www.amdgaming.com/promotions/*
-// @description Automates the collection of giveaway keys from the site
 // @author      oGiu
 // @grant       none
-// @version     1.1
+// @version     1.2
 // ==/UserScript==
 
 (function () {
@@ -15,7 +15,6 @@
   const CLAIM_SELECTOR   = '.promotion-claim-key-btn';
   const KEY_COUNT_SEL    = '.promotion-key-count';
   const STORAGE_KEY      = 'amd_claimed_promos';
-
   const REFRESH_INTERVAL = 10;
 
   let countdownInterval = null;
@@ -45,7 +44,9 @@
   }
 
   function slugFromHref(href) {
-    return href ? href.replace(/\/$/, '').split('/').pop() : null;
+    if (!href) return null;
+    const parts = href.replace(/\/$/, '').split('/');
+    return parts.pop();
   }
 
   function dispatchClicks(el) {
@@ -64,8 +65,7 @@
 
   function isClaimReady(btn) {
     if (!btn) return false;
-    if (btn.classList.contains('promotion-claim-key-btn--disabled')) return false;
-    return true;
+    return !btn.classList.contains('promotion-claim-key-btn--disabled');
   }
 
   function isClaimConfirmed() {
@@ -104,7 +104,7 @@
     });
 
     hud.innerHTML =
-      `AMD PROMO KEY AUTO-CLAIM v1.1<br>` +
+      `AMD PROMO KEY AUTO-CLAIM v1.3<br>` +
       `STATUS: <span style="color:${color}">${status}</span><br>` +
       extra +
       `ALREADY TRIED: ${claimed.length}<br>` +
@@ -112,72 +112,58 @@
       `<span id="amd-clear" style="color:#888;font-size:10px;cursor:pointer">[ clear history ]</span>`;
 
     document.body.appendChild(hud);
-
     document.getElementById('amd-clear').addEventListener('click', clearHistory);
   }
 
   function tickCountdown() {
     const el = document.getElementById(COUNTDOWN_ID);
-    if (el) {
-      el.innerText = countdown;
-    }
+    if (el) el.innerText = countdown;
   }
 
-  function runListPage() {
-    buildHUD({ status: 'WAITING FOR EMBER', color: '#ff9900', extra: 'PAGE: listing<br>' });
+  function runListPage(isHome = false) {
+    const pageName = isHome ? 'HOME' : 'LISTING';
+    buildHUD({ status: 'MONITORING', color: '#ff9900', extra: `PAGE: ${pageName}<br>` });
 
     hudKeepAliveInterval = setInterval(() => {
       if (!document.getElementById(HUD_ID)) {
-        buildHUD({ status: 'MONITORING FEATURED', color: '#ff9900', extra: 'PAGE: listing<br>' });
+        buildHUD({ status: 'MONITORING', color: '#ff9900', extra: `PAGE: ${pageName}<br>` });
       }
     }, 2000);
 
-    const observer = new MutationObserver(() => {
-      if (!document.querySelectorAll(CLAIM_SELECTOR).length) return;
-      observer.disconnect();
-      buildHUD({ status: 'MONITORING FEATURED', color: '#ff9900', extra: 'PAGE: listing<br>' });
-      startListLoop();
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-
-    setTimeout(() => { observer.disconnect(); startListLoop(); }, 10_000);
-  }
-
-  function startListLoop() {
     countdownInterval = setInterval(() => {
-      const claimLinks = Array.from(document.querySelectorAll(CLAIM_SELECTOR)).sort((a, b) => {
-        const aFeatured = a.closest('.promotion-main-featured-container') ? 0 : 1;
-        const bFeatured = b.closest('.promotion-main-featured-container') ? 0 : 1;
-        return aFeatured - bFeatured;
-      });
+      let links = [];
+      if (isHome) {
+        links = Array.from(document.querySelectorAll('.banner-rotator a[href*="/promotions/"]'));
+      } else {
+        links = Array.from(document.querySelectorAll(CLAIM_SELECTOR));
+      }
 
       const claimed = getClaimed();
 
-      for (const link of claimLinks) {
-        const href  = link.getAttribute('href');
-        const slug  = slugFromHref(href);
+      for (const link of links) {
+        const href = link.getAttribute('href');
+        const slug = slugFromHref(href);
 
         if (slug && isClaimed(slug, claimed)) continue;
 
-        const container  = link.closest('.promotion-claim-container') || link.closest('[class*="promotion"]');
-        const keyCountEl = container?.querySelector(KEY_COUNT_SEL);
-        const keyCount   = keyCountEl ? parseInt(keyCountEl.innerText, 10) : NaN;
-
-        if (!isNaN(keyCount) && keyCount <= 0) continue;
+        if (!isHome) {
+          const container = link.closest('.promotion-claim-container') || link.closest('[class*="promotion"]');
+          const keyCountEl = container?.querySelector(KEY_COUNT_SEL);
+          const keyCount = keyCountEl ? parseInt(keyCountEl.innerText, 10) : NaN;
+          if (!isNaN(keyCount) && keyCount <= 0) continue;
+        }
 
         stopAllTimers();
         buildHUD({
-          status: 'KEY AVAILABLE!',
+          status: 'PROMO FOUND!',
           color:  '#00ff00',
-          extra:  `PROMO: ${slug ?? '?'}<br>KEYS: ${isNaN(keyCount) ? '?' : keyCount}<br>`,
+          extra:  `TARGET: ${slug ?? '?'}<br>`,
         });
 
         setTimeout(() => {
           if (href) window.location.href = href;
           else dispatchClicks(link);
         }, 800);
-
         return;
       }
 
@@ -186,7 +172,11 @@
 
       if (countdown <= 0) {
         stopAllTimers();
-        location.reload();
+        if (isHome) {
+          window.location.href = 'https://www.amdgaming.com/promotions';
+        } else {
+          window.location.href = 'https://www.amdgaming.com/';
+        }
       }
     }, 1000);
   }
@@ -196,18 +186,18 @@
     let phase = 'waiting-button';
     countdown = 15;
 
-    buildHUD({ status: 'WAITING FOR EMBER', color: '#ffff00', extra: `PAGE: promotion<br>PROMO: ${slug}<br>` });
+    buildHUD({ status: 'WAITING FOR EMBER', color: '#ffff00', extra: `PAGE: PROMO<br>SLUG: ${slug}<br>` });
 
     hudKeepAliveInterval = setInterval(() => {
       if (!document.getElementById(HUD_ID)) {
         const label = phase === 'waiting-confirm' ? 'WAITING FOR CONFIRMATION' : 'WAITING FOR EMBER';
-        buildHUD({ status: label, color: '#ffff00', extra: `PAGE: promotion<br>PROMO: ${slug}<br>` });
+        buildHUD({ status: label, color: '#ffff00', extra: `PAGE: PROMO<br>SLUG: ${slug}<br>` });
       }
     }, 2000);
 
-    let waitInterval    = null;
+    let waitInterval = null;
     let confirmInterval = null;
-    let buttonObserver  = null;
+    let buttonObserver = null;
     let confirmObserver = null;
 
     function goToListPage() {
@@ -227,7 +217,7 @@
       clearInterval(waitInterval);
       phase = 'waiting-confirm';
 
-      buildHUD({ status: 'CLICKING...', color: '#00ffff', extra: `PROMO: ${slug}<br>` });
+      buildHUD({ status: 'CLICKING...', color: '#00ffff', extra: `SLUG: ${slug}<br>` });
       dispatchClicks(btn);
 
       countdown = 10;
@@ -251,7 +241,7 @@
         clearInterval(confirmInterval);
 
         addClaimed(slug);
-        buildHUD({ status: 'KEY CLAIMED!', color: '#00ff00', extra: `PROMO: ${slug}<br>` });
+        buildHUD({ status: 'KEY CLAIMED!', color: '#00ff00', extra: `SLUG: ${slug}<br>` });
 
         countdown = 5;
         confirmInterval = setInterval(() => {
@@ -276,8 +266,10 @@
   const path = window.location.pathname.replace(/\/$/, '');
 
   if (path === '/promotions') {
-    runListPage();
-  } else {
+    runListPage(false);
+  } else if (path === '' || path === '/') {
+    runListPage(true);
+  } else if (path.startsWith('/promotions/')) {
     runPromoPage();
   }
 
