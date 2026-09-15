@@ -12,23 +12,25 @@
 
 (function () {
   'use strict';
+  Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });
+  Object.defineProperty(document, 'hidden', { value: false, writable: true });
+
+  document.addEventListener('visibilitychange', (e) => { e.stopImmediatePropagation(); }, true);
+  window.addEventListener('blur', (e) => { e.stopImmediatePropagation(); }, true);
+  window.addEventListener('focus', (e) => { e.stopImmediatePropagation(); }, true);
 
   GM_addStyle(`
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@700;800&display=swap');
     #iga-toggle { position: fixed; top: 16px; right: 16px; z-index: 1000000; width: 42px; height: 42px; border-radius: 11px; background: #10b981; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-    #iga-container { position: fixed; top: 66px; right: 16px; z-index: 999999; width: 320px; font-family: 'JetBrains Mono', monospace; background: rgba(12,12,14,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; color: white; backdrop-filter: blur(10px); }
+    #iga-container { position: fixed; top: 66px; right: 16px; z-index: 999999; width: 320px; font-family: sans-serif; background: rgba(12,12,14,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; color: white; backdrop-filter: blur(10px); }
     .iga-hidden { display: none !important; }
     .iga-header { padding: 12px; background: rgba(16,185,129,0.1); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
     .iga-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow-y: auto; }
     .iga-card { border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
-    .iga-settings-panel { padding: 12px; background: #18181b; border-bottom: 1px solid #27272a; display: none; flex-direction: column; gap: 6px; }
+    .iga-settings-panel { padding: 12px; background: #18181b; display: none; flex-direction: column; gap: 6px; }
     .iga-settings-panel.open { display: flex; }
-    .iga-set-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; margin-bottom: 2px; }
-    .iga-set-title { font-size: 9px; font-weight: 800; color: #10b981; margin: 8px 0 4px 0; text-transform: uppercase; border-bottom: 1px solid #27272a; padding-bottom: 2px; }
-    .iga-input { background: #27272a; border: 1px solid #3f3f46; color: white; border-radius: 4px; padding: 2px 4px; width: 45px; text-align: center; }
+    .iga-set-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
+    .iga-input { background: #27272a; border: 1px solid #3f3f46; color: white; border-radius: 4px; padding: 2px; width: 45px; text-align: center; }
     .iga-alert { padding: 8px; border-radius: 6px; font-size: 10px; border-left: 4px solid #10b981; background: rgba(255,255,255,0.05); margin-bottom: 5px; }
-    #iga-save-btn { background: #10b981; color: white; border: none; border-radius: 6px; padding: 6px; font-weight: 800; cursor: pointer; margin-top: 10px; font-size: 10px; }
-    .iga-rank-grid { display: grid; grid-template-columns: 1fr 40px 55px; gap: 8px; align-items: center; font-size: 9px; }
   `);
 
   const CATEGORIES = [
@@ -40,6 +42,8 @@
     { id: 'hitman', label: 'HITMAN' },
     { id: 'rolling', label: 'ROLLING' }
   ];
+
+  const EMOJIS = ['😂', '💀', '🔥', '❤️', '💯', '👏', '🙏', '😎', '👀', '✅', '🎉', '🤔', '😭', '🤣'];
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms + Math.random() * 500)); }
 
@@ -133,7 +137,7 @@
     document.getElementById('iga-cfg').classList.remove('open');
   };
 
-  document.getElementById('iga-force-btn').onclick = () => { GM_setValue('igaLastCycle', '0'); sessionStorage.clear(); window.location.reload(); };
+  document.getElementById('iga-force-btn').onclick = () => { GM_setValue('igaLastCycle', '0'); GM_setValue('igaLastChatAttempt', '0'); sessionStorage.clear(); window.location.reload(); };
 
   function getCurrentClams() {
     const clamLabel = Array.from(document.querySelectorAll('span')).find(s => s.textContent.trim() === 'Clams');
@@ -213,7 +217,7 @@
       } catch (e) {}
 
       if (timerSpan) {
-        document.getElementById('next-step-txt').textContent = "Assistindo vídeo...";
+        document.getElementById('next-step-txt').textContent = "Watching video...";
         const currentVal = timerSpan.innerText.split(' / ')[0].trim();
         const lastVal = sessionStorage.getItem('igaLastTVal');
         const lastTs = parseInt(sessionStorage.getItem('igaLastTStamp') || '0');
@@ -280,6 +284,69 @@
     return false;
   }
 
+  function getChatInput() {
+    const selectors = [
+      'input[placeholder="Type a message…"]',
+      'input[placeholder*="message" i]',
+      'input[placeholder*="chat" i]',
+      'textarea[placeholder*="message" i]',
+      'textarea[placeholder*="chat" i]',
+      'textarea',
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function getChatSendButton() {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    return buttons.find(b => b.textContent.trim().toLowerCase() === 'send' && !b.disabled);
+  }
+
+  function isChatBonusReady() {
+    const lastAttempt = parseInt(GM_getValue('igaLastChatAttempt', '0'));
+    if (Date.now() - lastAttempt < 3 * 60 * 1000) return false;
+
+    const rDivs = document.querySelectorAll('div.rounded-full');
+    for (let i = 0; i < rDivs.length; i++) {
+      const txt = rDivs[i].textContent.toLowerCase();
+      if (txt.includes('send 1 message')) return true;
+    }
+    return false;
+  }
+
+  async function autoChat() {
+    if (!isChatBonusReady()) return false;
+
+    const chatInput = getChatInput();
+    const sendBtn = getChatSendButton();
+
+    if (!chatInput || !sendBtn) return false;
+    if (sendBtn.disabled) return false;
+
+    const message = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+    const proto = chatInput.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const nativeSetter = Object.getOwnPropertyDescriptor(proto, "value").set;
+    nativeSetter.call(chatInput, message);
+
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await sleep(1500);
+
+    if (!sendBtn.disabled) {
+        humanClick(sendBtn);
+        GM_setValue('igaLastChatAttempt', Date.now().toString());
+        await sleep(2000);
+        return true;
+    }
+
+    return false;
+  }
+
   async function doWheel() {
     if (!GM_getValue('autoWheel', true)) return false;
     const modal = document.querySelector('div.bg-zinc-950\\/70.shadow-2xl');
@@ -315,53 +382,64 @@
     return false;
   }
 
-  async function runAutomation() {
-    const isTaskPage = window.location.pathname.includes('/tasks');
+  let igaRunning = false;
 
-    if (isTaskPage) {
-      const busy = await processTasks();
-      if (busy) {
-        document.getElementById('next-step-txt').textContent = "Task em progresso...";
+  async function runAutomation() {
+    if (igaRunning) return;
+    igaRunning = true;
+    try {
+      if (GM_getValue('autoChat', true)) {
+          await autoChat();
+      }
+      const isTaskPage = window.location.pathname.includes('/tasks');
+
+      if (isTaskPage) {
+        const busy = await processTasks();
+        if (busy) {
+          document.getElementById('next-step-txt').textContent = "Task in progress...";
+          return;
+        }
+      }
+
+      const lastCycle = parseInt(GM_getValue('igaLastCycle', '0'));
+      const cycleMs = (GM_getValue('cycleMin', 15) * 60 * 1000);
+      const now = Date.now();
+
+      if (now - lastCycle < cycleMs && !sessionStorage.getItem('igaActive')) {
+        const diff = (lastCycle + cycleMs) - now;
+        document.getElementById('cycle-timer').textContent = `${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`;
         return;
       }
-    }
 
-    const lastCycle = parseInt(GM_getValue('igaLastCycle', '0'));
-    const cycleMs = (GM_getValue('cycleMin', 15) * 60 * 1000);
-    const now = Date.now();
+      sessionStorage.setItem('igaActive', 'true');
+      document.getElementById('cycle-timer').textContent = "EXECUTING";
+      const phase = sessionStorage.getItem('igaPhase') || 'tasks';
 
-    if (now - lastCycle < cycleMs && !sessionStorage.getItem('igaActive')) {
-      const diff = (lastCycle + cycleMs) - now;
-      document.getElementById('cycle-timer').textContent = `${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`;
-      return;
-    }
-
-    sessionStorage.setItem('igaActive', 'true');
-    document.getElementById('cycle-timer').textContent = "EXECUTING";
-    const phase = sessionStorage.getItem('igaPhase') || 'tasks';
-
-    if (phase === 'tasks') {
-      if (!isTaskPage) { window.location.href = 'https://www.itzagud.net/tasks'; return; }
-      const busy = await processTasks();
-      if (!busy) { sessionStorage.setItem('igaPhase', 'points'); window.location.reload(); }
-    } else if (phase === 'points') {
-      if (!window.location.search.includes('tab=points')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=points'; return; }
-      const wheelWorking = await doWheel();
-      if (wheelWorking) return;
-      const entered = await processGiveaways(true);
-      if (!entered) { sessionStorage.setItem('igaPhase', 'clams'); window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; }
-    } else if (phase === 'clams') {
-      if (!window.location.search.includes('tab=clams')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; return; }
-      const wheelWorking = await doWheel();
-      if (wheelWorking) return;
-      const entered = await processGiveaways(false);
-      if (!entered) {
-        GM_setValue('igaLastCycle', Date.now().toString());
-        sessionStorage.removeItem('igaActive');
-        sessionStorage.removeItem('igaSkipList');
-        sessionStorage.setItem('igaPhase', 'tasks');
-        window.location.reload();
+      if (phase === 'tasks') {
+        if (!isTaskPage) { window.location.href = 'https://www.itzagud.net/tasks'; return; }
+        const busy = await processTasks();
+        if (!busy) { sessionStorage.setItem('igaPhase', 'points'); window.location.reload(); }
+      } else if (phase === 'points') {
+        if (!window.location.search.includes('tab=points')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=points'; return; }
+        const wheelWorking = await doWheel();
+        if (wheelWorking) return;
+        const entered = await processGiveaways(true);
+        if (!entered) { sessionStorage.setItem('igaPhase', 'clams'); window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; }
+      } else if (phase === 'clams') {
+        if (!window.location.search.includes('tab=clams')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; return; }
+        const wheelWorking = await doWheel();
+        if (wheelWorking) return;
+        const entered = await processGiveaways(false);
+        if (!entered) {
+          GM_setValue('igaLastCycle', Date.now().toString());
+          sessionStorage.removeItem('igaActive');
+          sessionStorage.removeItem('igaSkipList');
+          sessionStorage.setItem('igaPhase', 'tasks');
+          window.location.reload();
+        }
       }
+    } finally {
+      igaRunning = false;
     }
   }
 
