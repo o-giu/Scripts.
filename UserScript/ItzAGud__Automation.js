@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ItzAGud - Automation
-// @version      2.3
+// @version      2.4
 // @author       oGiu
 // @match        https://www.itzagud.net/*
 // @description  Automates the site's tasks, chat, roulette, and giveaways
@@ -177,85 +177,81 @@
   async function processTasks() {
     const awesomeBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Awesome!' && b.offsetParent !== null);
     if (awesomeBtn) {
-        alert$(`Success!`, 'green');
-        humanClick(awesomeBtn);
-        await sleep(3000);
-        return true;
+      alert$(`Success!`, 'green');
+      humanClick(awesomeBtn);
+      await sleep(3000);
+      return true;
     }
 
     const claim = Array.from(document.querySelectorAll('button')).find(b => (b.innerText.toLowerCase().includes('claim') || b.innerText.toLowerCase() === 'claim reward') && b.offsetParent !== null);
     if (claim) {
-        alert$(`Claiming Reward...`, 'green');
-        humanClick(claim);
-        await sleep(4000);
-        window.location.reload();
-        return true;
+      alert$(`Claiming Reward...`, 'green');
+      humanClick(claim);
+      await sleep(4000);
+      window.location.reload();
+      return true;
     }
 
     const iframe = document.querySelector('iframe[src*="youtube.com"]');
     const timerSpan = Array.from(document.querySelectorAll('span')).find(s => s.innerText.includes(' / ') && s.parentElement.innerText.includes('Watched:'));
 
-    if (iframe || timerSpan) {
-        if (iframe) {
-            iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+    if (iframe) {
+      try {
+        const playBtn = iframe.contentDocument ? iframe.contentDocument.querySelector('.ytp-large-play-button') : null;
+        if (playBtn) {
+          humanClick(playBtn);
         }
+        iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        iframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
+      } catch (e) {}
+    }
 
-        if (timerSpan) {
-            const currentVal = timerSpan.innerText.split(' / ')[0].trim();
-            const lastVal = sessionStorage.getItem('igaLastTVal');
-            const lastTs = parseInt(sessionStorage.getItem('igaLastTStamp') || '0');
-            const now = Date.now();
+    if (timerSpan) {
+      const currentVal = timerSpan.innerText.split(' / ')[0].trim();
+      const lastVal = sessionStorage.getItem('igaLastTVal');
+      const lastTs = parseInt(sessionStorage.getItem('igaLastTStamp') || '0');
+      const now = Date.now();
 
-            if (lastVal === currentVal) {
-                if (lastTs === 0) sessionStorage.setItem('igaLastTStamp', now.toString());
-                if (now - lastTs > 60000) {
-                    const currentLabel = sessionStorage.getItem('igaCurrentVideoLabel');
-                    alert$(`Skipping Stuck Video`, 'yellow');
-                    if (currentLabel) {
-                        let list = JSON.parse(sessionStorage.getItem('igaSkipList') || '[]');
-                        if (!list.includes(currentLabel)) list.push(currentLabel);
-                        sessionStorage.setItem('igaSkipList', JSON.stringify(list));
-                    }
-                    const closeBtn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText === '✕' || b.getAttribute('title') === 'Close') && b.offsetParent !== null);
-                    if (closeBtn) humanClick(closeBtn);
-                    sessionStorage.removeItem('igaLastTStamp');
-                    sessionStorage.removeItem('igaLastTVal');
-                    return true;
-                }
-            } else {
-                sessionStorage.setItem('igaLastTVal', currentVal);
-                sessionStorage.setItem('igaLastTStamp', now.toString());
-            }
+      if (lastVal === currentVal) {
+        if (lastTs === 0) sessionStorage.setItem('igaLastTStamp', now.toString());
+        if (now - lastTs > 65000) {
+          alert$(`Skipping Stuck Video`, 'yellow');
+          const closeBtn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText === '✕' || b.getAttribute('title') === 'Close') && b.offsetParent !== null);
+          if (closeBtn) humanClick(closeBtn);
+          sessionStorage.removeItem('igaLastTStamp');
+          sessionStorage.removeItem('igaLastTVal');
+          return true;
         }
-        return true;
+      } else {
+        sessionStorage.setItem('igaLastTVal', currentVal);
+        sessionStorage.setItem('igaLastTStamp', now.toString());
+      }
+      return true;
     }
 
     const openPlayer = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Open Player' && b.offsetParent !== null);
     if (openPlayer) {
-        alert$(`Opening Video...`, 'green');
-        humanClick(openPlayer);
-        await sleep(3000);
-        return true;
+      alert$(`Opening Video...`, 'green');
+      humanClick(openPlayer);
+      await sleep(5000);
+      return true;
     }
 
     const skipList = JSON.parse(sessionStorage.getItem('igaSkipList') || '[]');
     const articles = Array.from(document.querySelectorAll('article'));
     const nextTask = articles.find(art => {
-        const label = art.getAttribute('aria-label');
-        const btn = art.querySelector('button');
-        const txt = btn ? btn.innerText.toLowerCase() : "";
-        return label && !skipList.includes(label) && btn && (txt.includes('watch & earn') || txt.includes('start task')) && !btn.disabled;
+      const label = art.getAttribute('aria-label');
+      const btn = art.querySelector('button');
+      const txt = btn ? btn.innerText.toLowerCase() : "";
+      return label && !skipList.includes(label) && btn && (txt.includes('watch & earn') || txt.includes('start task')) && !btn.disabled;
     });
 
     if (nextTask) {
-        const label = nextTask.getAttribute('aria-label');
-        const btn = nextTask.querySelector('button');
-        alert$(`Activating Task...`, 'green');
-        sessionStorage.setItem('igaCurrentVideoLabel', label);
-        sessionStorage.setItem('igaLastTStamp', '0');
-        humanClick(btn);
-        await sleep(3000);
-        return true;
+      const btn = nextTask.querySelector('button');
+      alert$(`Activating Task...`, 'green');
+      humanClick(btn);
+      await sleep(5000);
+      return true;
     }
 
     return false;
