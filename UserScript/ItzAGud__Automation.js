@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         ItzAGud - Automation
-// @version      2.4
+// @version      2.5
 // @author       oGiu
 // @match        https://www.itzagud.net/*
 // @description  Automates the site's tasks, chat, roulette, and giveaways
@@ -43,6 +43,20 @@
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms + Math.random() * 500)); }
 
+  function deepQuery(root, selector) {
+    if (!root) return null;
+    let found = root.querySelector(selector);
+    if (found) return found;
+    const all = root.querySelectorAll('*');
+    for (const el of all) {
+      if (el.shadowRoot) {
+        found = deepQuery(el.shadowRoot, selector);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
   function humanClick(el) {
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -68,7 +82,7 @@
   `).join('');
 
   container.innerHTML = `
-    <div class="iga-header"><span style="font-weight:800; font-size:12px; color:#10b981;">ITZAGUD V2.4</span><button id="iga-cfg-btn" style="background:none; border:none; cursor:pointer;">⚙️</button></div>
+    <div class="iga-header"><span style="font-weight:800; font-size:12px; color:#10b981;">ITZAGUD V2.5</span><button id="iga-cfg-btn" style="background:none; border:none; cursor:pointer;">⚙️</button></div>
     <div class="iga-settings-panel" id="iga-cfg">
       <div class="iga-set-title">General</div>
       <div class="iga-set-row"><span>Auto Tasks</span><input type="checkbox" id="iga-set-tasks"></div>
@@ -175,9 +189,55 @@
   }
 
   async function processTasks() {
+    const iframe = document.querySelector('iframe[src*="youtube.com"]');
+    const timerSpan = Array.from(document.querySelectorAll('span')).find(s => s.innerText.includes(' / ') && s.parentElement.innerText.includes('Watched:'));
+
+    const claimBtn = Array.from(document.querySelectorAll('button')).find(b => {
+        const txt = b.innerText.toLowerCase().replace(/\s+/g, ' ').trim();
+        return (txt === 'claim reward') && b.className.includes('bg-emerald-600') && b.offsetParent !== null;
+    });
+
+    if (claimBtn) {
+        humanClick(claimBtn);
+        await sleep(3000);
+        window.location.reload();
+        return true;
+    }
+
+    if (iframe) {
+      try {
+        iframe.contentWindow.postMessage('{"event":"command","func":"mute","args":""}', '*');
+        iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        const playBtn = iframe.contentDocument?.querySelector('.ytp-large-play-button');
+        if (playBtn) humanClick(playBtn);
+      } catch (e) {}
+
+      if (timerSpan) {
+        document.getElementById('next-step-txt').textContent = "Assistindo vídeo...";
+        const currentVal = timerSpan.innerText.split(' / ')[0].trim();
+        const lastVal = sessionStorage.getItem('igaLastTVal');
+        const lastTs = parseInt(sessionStorage.getItem('igaLastTStamp') || '0');
+        const now = Date.now();
+
+        if (lastVal === currentVal) {
+          if (lastTs === 0) sessionStorage.setItem('igaLastTStamp', now.toString());
+          if (now - lastTs > 65000) {
+            const closeBtn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText === '✕' || b.getAttribute('title') === 'Close') && b.offsetParent !== null);
+            if (closeBtn) humanClick(closeBtn);
+            sessionStorage.removeItem('igaLastTStamp');
+            sessionStorage.removeItem('igaLastTVal');
+          }
+        } else {
+          sessionStorage.setItem('igaLastTVal', currentVal);
+          sessionStorage.setItem('igaLastTStamp', now.toString());
+        }
+        return true;
+      }
+      return true;
+    }
+
     const awesomeBtn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Awesome!' && b.offsetParent !== null);
     if (awesomeBtn) {
-      alert$(`Success!`, 'green');
       humanClick(awesomeBtn);
       await sleep(3000);
       return true;
@@ -185,53 +245,14 @@
 
     const claim = Array.from(document.querySelectorAll('button')).find(b => (b.innerText.toLowerCase().includes('claim') || b.innerText.toLowerCase() === 'claim reward') && b.offsetParent !== null);
     if (claim) {
-      alert$(`Claiming Reward...`, 'green');
       humanClick(claim);
       await sleep(4000);
       window.location.reload();
       return true;
     }
 
-    const iframe = document.querySelector('iframe[src*="youtube.com"]');
-    const timerSpan = Array.from(document.querySelectorAll('span')).find(s => s.innerText.includes(' / ') && s.parentElement.innerText.includes('Watched:'));
-
-    if (iframe) {
-      try {
-        const playBtn = iframe.contentDocument ? iframe.contentDocument.querySelector('.ytp-large-play-button') : null;
-        if (playBtn) {
-          humanClick(playBtn);
-        }
-        iframe.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
-        iframe.contentWindow.postMessage('{"event":"command","func":"unMute","args":""}', '*');
-      } catch (e) {}
-    }
-
-    if (timerSpan) {
-      const currentVal = timerSpan.innerText.split(' / ')[0].trim();
-      const lastVal = sessionStorage.getItem('igaLastTVal');
-      const lastTs = parseInt(sessionStorage.getItem('igaLastTStamp') || '0');
-      const now = Date.now();
-
-      if (lastVal === currentVal) {
-        if (lastTs === 0) sessionStorage.setItem('igaLastTStamp', now.toString());
-        if (now - lastTs > 65000) {
-          alert$(`Skipping Stuck Video`, 'yellow');
-          const closeBtn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText === '✕' || b.getAttribute('title') === 'Close') && b.offsetParent !== null);
-          if (closeBtn) humanClick(closeBtn);
-          sessionStorage.removeItem('igaLastTStamp');
-          sessionStorage.removeItem('igaLastTVal');
-          return true;
-        }
-      } else {
-        sessionStorage.setItem('igaLastTVal', currentVal);
-        sessionStorage.setItem('igaLastTStamp', now.toString());
-      }
-      return true;
-    }
-
     const openPlayer = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Open Player' && b.offsetParent !== null);
     if (openPlayer) {
-      alert$(`Opening Video...`, 'green');
       humanClick(openPlayer);
       await sleep(5000);
       return true;
@@ -247,8 +268,10 @@
     });
 
     if (nextTask) {
+      const label = nextTask.getAttribute('aria-label');
       const btn = nextTask.querySelector('button');
-      alert$(`Activating Task...`, 'green');
+      skipList.push(label);
+      sessionStorage.setItem('igaSkipList', JSON.stringify(skipList));
       humanClick(btn);
       await sleep(5000);
       return true;
@@ -264,7 +287,6 @@
         const wonText = modal.innerText.includes('You won');
         const doneBtn = Array.from(modal.querySelectorAll('button')).find(b => b.innerText.trim() === 'Done');
         if (wonText && doneBtn) {
-            alert$(`Wheel Finish`, 'green');
             humanClick(doneBtn);
             await sleep(2000);
             return true;
@@ -273,7 +295,6 @@
             b.innerText.trim().toUpperCase() === 'SPIN' && !b.disabled && b.className.includes('bg-emerald')
         );
         if (spinBtn) {
-            alert$(`Spinning...`, 'green');
             humanClick(spinBtn);
             await sleep(12000);
             return true;
@@ -286,62 +307,50 @@
     if (triggerBtn && !triggerBtn.disabled) {
         const group = triggerBtn.closest('.group');
         const tooltip = group ? group.querySelector('span.pointer-events-none') : null;
-        const match = tooltip ? tooltip.innerText.match(/(\d+)\/\d+/) : null;
         if (tooltip && tooltip.innerText.includes('cooldown')) return false;
-        if (match && parseInt(match[1]) > 0) {
-            alert$(`Opening Wheel...`, 'green');
-            humanClick(triggerBtn);
-            await sleep(3500);
-            return true;
-        }
+        humanClick(triggerBtn);
+        await sleep(3500);
+        return true;
     }
     return false;
   }
 
   async function runAutomation() {
+    const isTaskPage = window.location.pathname.includes('/tasks');
+
+    if (isTaskPage) {
+      const busy = await processTasks();
+      if (busy) {
+        document.getElementById('next-step-txt').textContent = "Task em progresso...";
+        return;
+      }
+    }
+
     const lastCycle = parseInt(GM_getValue('igaLastCycle', '0'));
     const cycleMs = (GM_getValue('cycleMin', 15) * 60 * 1000);
     const now = Date.now();
+
     if (now - lastCycle < cycleMs && !sessionStorage.getItem('igaActive')) {
       const diff = (lastCycle + cycleMs) - now;
       document.getElementById('cycle-timer').textContent = `${Math.floor(diff / 60000)}m ${Math.floor((diff % 60000) / 1000)}s`;
       return;
     }
+
     sessionStorage.setItem('igaActive', 'true');
     document.getElementById('cycle-timer').textContent = "EXECUTING";
     const phase = sessionStorage.getItem('igaPhase') || 'tasks';
 
-    if (GM_getValue('autoChat', true) && document.body.innerText.includes('Send 1 message for +250')) {
-      const lastChat = parseInt(GM_getValue('igaLastChatSentAt', '0'));
-      if (now - lastChat >= 3600000) {
-        const input = document.querySelector('input[placeholder="Type a message…"]');
-        const send = Array.from(document.querySelectorAll('button')).find(b => b.innerText.trim() === 'Send');
-        if (input && send) {
-          humanClick(input); await sleep(1000);
-          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-          setter ? setter.call(input, '👍') : input.value = '👍';
-          input.dispatchEvent(new Event('input', { bubbles: true }));
-          await sleep(1000); humanClick(send); GM_setValue('igaLastChatSentAt', Date.now().toString()); await sleep(3000);
-        }
-      }
-    }
-
     if (phase === 'tasks') {
-      document.getElementById('next-step-txt').textContent = "Processing Tasks...";
-      if (!window.location.pathname.includes('/tasks')) { window.location.href = 'https://www.itzagud.net/tasks'; return; }
+      if (!isTaskPage) { window.location.href = 'https://www.itzagud.net/tasks'; return; }
       const busy = await processTasks();
-      if (!busy) { sessionStorage.setItem('igaPhase', 'points'); }
-    }
-    else if (phase === 'points') {
-      document.getElementById('next-step-txt').textContent = "Processing Points...";
+      if (!busy) { sessionStorage.setItem('igaPhase', 'points'); window.location.reload(); }
+    } else if (phase === 'points') {
       if (!window.location.search.includes('tab=points')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=points'; return; }
       const wheelWorking = await doWheel();
       if (wheelWorking) return;
       const entered = await processGiveaways(true);
       if (!entered) { sessionStorage.setItem('igaPhase', 'clams'); window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; }
-    }
-    else if (phase === 'clams') {
-      document.getElementById('next-step-txt').textContent = "Processing Clams...";
+    } else if (phase === 'clams') {
       if (!window.location.search.includes('tab=clams')) { window.location.href = 'https://www.itzagud.net/steam-key-giveaways?tab=clams'; return; }
       const wheelWorking = await doWheel();
       if (wheelWorking) return;
@@ -351,7 +360,7 @@
         sessionStorage.removeItem('igaActive');
         sessionStorage.removeItem('igaSkipList');
         sessionStorage.setItem('igaPhase', 'tasks');
-        alert$('Cycle Finished!', 'green'); window.location.reload();
+        window.location.reload();
       }
     }
   }
