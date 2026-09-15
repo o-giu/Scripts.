@@ -306,9 +306,6 @@
   }
 
   function isChatBonusReady() {
-    const lastAttempt = parseInt(GM_getValue('igaLastChatAttempt', '0'));
-    if (Date.now() - lastAttempt < 3 * 60 * 1000) return false;
-
     const rDivs = document.querySelectorAll('div.rounded-full');
     for (let i = 0; i < rDivs.length; i++) {
       const txt = rDivs[i].textContent.toLowerCase();
@@ -388,8 +385,12 @@
     if (igaRunning) return;
     igaRunning = true;
     try {
-      if (GM_getValue('autoChat', true)) {
-          await autoChat();
+      if (GM_getValue('autoChat', true) && !localStorage.getItem('igaChatDone')) {
+          const sent = await autoChat();
+          if (sent) {
+              localStorage.setItem('igaChatDone', 'true');
+              await sleep(2000);
+          }
       }
       const isTaskPage = window.location.pathname.includes('/tasks');
 
@@ -434,9 +435,9 @@
           GM_setValue('igaLastCycle', Date.now().toString());
           sessionStorage.removeItem('igaActive');
           sessionStorage.removeItem('igaSkipList');
+          localStorage.removeItem('igaChatDone');
           sessionStorage.setItem('igaPhase', 'tasks');
           window.location.reload();
-        }
       }
     } finally {
       igaRunning = false;
