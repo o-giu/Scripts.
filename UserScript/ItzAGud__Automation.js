@@ -385,13 +385,19 @@
     if (igaRunning) return;
     igaRunning = true;
     try {
-      if (GM_getValue('autoChat', true) && !localStorage.getItem('igaChatDone')) {
-          const sent = await autoChat();
-          if (sent) {
-              localStorage.setItem('igaChatDone', 'true');
-              await sleep(2000);
+      if (GM_getValue('autoChat', true)) {
+          const currentCycle = GM_getValue('igaLastCycle', '0');
+          const lastChatCycle = localStorage.getItem('igaChatCycle') || 'none';
+
+          if (lastChatCycle !== currentCycle) {
+              const sent = await autoChat();
+              if (sent) {
+                  localStorage.setItem('igaChatCycle', currentCycle);
+                  await sleep(2000);
+              }
           }
       }
+
       const isTaskPage = window.location.pathname.includes('/tasks');
 
       if (isTaskPage) {
@@ -435,9 +441,9 @@
           GM_setValue('igaLastCycle', Date.now().toString());
           sessionStorage.removeItem('igaActive');
           sessionStorage.removeItem('igaSkipList');
-          localStorage.removeItem('igaChatDone');
           sessionStorage.setItem('igaPhase', 'tasks');
           window.location.reload();
+        }
       }
     } finally {
       igaRunning = false;
