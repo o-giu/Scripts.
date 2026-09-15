@@ -20,17 +20,26 @@
   window.addEventListener('focus', (e) => { e.stopImmediatePropagation(); }, true);
 
   GM_addStyle(`
-    #iga-toggle { position: fixed; top: 16px; right: 16px; z-index: 1000000; width: 42px; height: 42px; border-radius: 11px; background: #10b981; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-    #iga-container { position: fixed; top: 66px; right: 16px; z-index: 999999; width: 320px; font-family: sans-serif; background: rgba(12,12,14,0.98); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; overflow: hidden; color: white; backdrop-filter: blur(10px); }
-    .iga-hidden { display: none !important; }
-    .iga-header { padding: 12px; background: rgba(16,185,129,0.1); border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center; }
-    .iga-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow-y: auto; }
-    .iga-card { border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); }
-    .iga-settings-panel { padding: 12px; background: #18181b; display: none; flex-direction: column; gap: 6px; }
-    .iga-settings-panel.open { display: flex; }
-    .iga-set-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
-    .iga-input { background: #27272a; border: 1px solid #3f3f46; color: white; border-radius: 4px; padding: 2px; width: 45px; text-align: center; }
-    .iga-alert { padding: 8px; border-radius: 6px; font-size: 10px; border-left: 4px solid #10b981; background: rgba(255,255,255,0.05); margin-bottom: 5px; }
+    #iga-toggle{position:fixed;top:16px;right:16px;z-index:1000000;width:42px;height:42px;border-radius:11px;background:#10b981;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 15px rgba(0,0,0,0.3);transition:all 0.2s}
+    #iga-toggle:hover{transform:scale(1.05)}
+    #iga-toggle.active{background:#059669}
+    #iga-container{position:fixed;top:66px;right:16px;z-index:999999;width:320px;font-family:sans-serif;background:#18181b;border:1px solid #27272a;border-radius:12px;overflow:hidden;color:white;box-shadow:0 10px 25px rgba(0,0,0,0.5)}
+    .iga-hidden{display:none !important}
+    .iga-header{padding:15px;background:#202023;border-bottom:1px solid #27272a;display:flex;justify-content:space-between;align-items:center}
+    .iga-body{padding:15px;display:flex;flex-direction:column;gap:10px}
+    .iga-settings-panel{padding:15px;background:#1e1e21;display:none;border-bottom:1px solid #27272a}
+    .iga-settings-panel.open{display:block}
+    .iga-rank-grid{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;margin-bottom:8px;font-size:12px}
+    .iga-set-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px}
+    .iga-set-title{font-weight:bold;color:#10b981;margin:10px 0 5px 0;font-size:11px;text-transform:uppercase}
+    .iga-input{background:#27272a;border:1px solid #3f3f46;color:white;border-radius:4px;padding:4px;width:50px;text-align:center}
+    .iga-btn{width:100%;padding:10px;background:#10b981;border:none;color:white;border-radius:6px;font-weight:600;cursor:pointer;margin-top:10px;transition:background 0.2s}
+    .iga-btn:hover{background:#059669}
+    .iga-card{border-radius:8px;padding:10px;background:#202023;border:1px solid #27272a}
+    .iga-alert{padding:8px;border-radius:6px;font-size:10px;border-left:4px solid #10b981;background:#202023;margin-bottom:5px}
+    @media (max-width: 400px) {
+      #iga-container { width: 95% !important; right: 2.5% !important; }
+    }
   `);
 
   const CATEGORIES = [
@@ -75,7 +84,9 @@
   document.body.appendChild(toggle);
 
   const container = document.createElement('div');
-  container.id = 'iga-container'; container.className = 'iga-hidden';
+  container.id = 'iga-container';
+  container.className = 'iga-hidden';
+  document.body.appendChild(container);
 
   let rankHtml = CATEGORIES.map(cat => `
     <div class="iga-rank-grid">
@@ -86,23 +97,33 @@
   `).join('');
 
   container.innerHTML = `
-    <div class="iga-header"><span style="font-weight:800; font-size:12px; color:#10b981;">ITZAGUD V2.5</span><button id="iga-cfg-btn" style="background:none; border:none; cursor:pointer;">⚙️</button></div>
+    <div class="iga-header">
+      <span style="font-weight:800; font-size:14px; color:#10b981;">ITZAGUD V2.5</span>
+      <button id="iga-cfg-btn" style="background:none; border:none; cursor:pointer; font-size: 16px;">⚙️</button>
+    </div>
     <div class="iga-settings-panel" id="iga-cfg">
-      <div class="iga-set-title">General</div>
+      <div class="iga-set-title">Geral</div>
       <div class="iga-set-row"><span>Auto Tasks</span><input type="checkbox" id="iga-set-tasks"></div>
       <div class="iga-set-row"><span>Auto Wheel</span><input type="checkbox" id="iga-set-wheel"></div>
       <div class="iga-set-row"><span>Auto Chat</span><input type="checkbox" id="iga-set-chat"></div>
-      <div class="iga-set-row"><span>Clams Reserve</span><input type="number" id="iga-set-minclams" class="iga-input"></div>
+      <div class="iga-set-row"><span>Min Clams</span><input type="number" id="iga-set-minclams" class="iga-input"></div>
       <div class="iga-set-row"><span>Cycle (min)</span><input type="number" id="iga-set-cycle" class="iga-input"></div>
-      <div class="iga-set-title">Rank | Enable | Entries</div>
+
+      <div class="iga-set-title">Ranks</div>
       ${rankHtml}
-      <button id="iga-save-btn">SAVE SETTINGS</button>
+      <button id="iga-save-btn" class="iga-btn">SAVE CONFIG</button>
     </div>
     <div class="iga-body">
       <div id="iga-alerts"></div>
-      <div class="iga-card"><div style="font-size:8px; color:#52525b;">CYCLE TIMER</div><div id="cycle-timer" style="font-size:14px; font-weight:bold; color:#10b981; margin-top:2px;">...</div></div>
-      <div class="iga-card"><div style="font-size:8px; color:#52525b;">STATUS</div><div id="next-step-txt" style="font-size:10px; color:#e4e4e7; margin-top:4px;">Waiting...</div></div>
-      <button id="iga-force-btn" style="width: 100%; padding: 10px; background: #10b981; border: none; color: white; border-radius: 8px; font-weight: 700; cursor: pointer;">RESET & FORCE SCAN</button>
+      <div class="iga-card">
+        <div style="font-size:9px; color:#a1a1aa;">TIMER</div>
+        <div id="cycle-timer" style="font-size:16px; font-weight:bold; color:#10b981;">...</div>
+      </div>
+      <div class="iga-card">
+        <div style="font-size:9px; color:#a1a1aa;">STATUS</div>
+        <div id="next-step-txt" style="font-size:12px; color:#e4e4e7; margin-top:2px;">Aguardando...</div>
+      </div>
+      <button id="iga-force-btn" class="iga-btn" style="background:#ef4444;">RESET & FORCE SCAN</button>
     </div>
   `;
   document.body.appendChild(container);
@@ -121,7 +142,10 @@
   syncUI();
 
   document.getElementById('iga-cfg-btn').onclick = () => document.getElementById('iga-cfg').classList.toggle('open');
-  toggle.onclick = () => container.classList.toggle('iga-hidden');
+  toggle.onclick = () => {
+    const isHidden = container.classList.toggle('iga-hidden');
+    toggle.classList.toggle('active', !isHidden);
+  };
 
   document.getElementById('iga-save-btn').onclick = () => {
     GM_setValue('autoTasks', document.getElementById('iga-set-tasks').checked);
