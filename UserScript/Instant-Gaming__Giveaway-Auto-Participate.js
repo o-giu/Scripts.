@@ -9,6 +9,20 @@
 
 (function() {
     'use strict';
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });
+    Object.defineProperty(document, 'hidden', { value: false, writable: true });
+
+    document.addEventListener('visibilitychange', (e) => {
+        e.stopImmediatePropagation();
+    }, true);
+
+    window.addEventListener('blur', (e) => {
+        e.stopImmediatePropagation();
+    }, true);
+    
+    window.addEventListener('focus', (e) => {
+        e.stopImmediatePropagation();
+    }, true);
 
     const defaultLinks = [
         "https://www.instant-gaming.com/fr/giveaway/BOBLENNON",
