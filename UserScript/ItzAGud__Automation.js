@@ -121,7 +121,7 @@
       </div>
       <div class="iga-card">
         <div style="font-size:9px; color:#a1a1aa;">STATUS</div>
-        <div id="next-step-txt" style="font-size:12px; color:#e4e4e7; margin-top:2px;">Aguardando...</div>
+        <div id="next-step-txt" style="font-size:12px; color:#e4e4e7; margin-top:2px;">Waiting...</div>
       </div>
       <button id="iga-force-btn" class="iga-btn" style="background:#ef4444;">RESET & FORCE SCAN</button>
     </div>
