@@ -4,6 +4,7 @@
 // @match       https://www.amdgaming.com/promotions
 // @match       https://www.amdgaming.com/promotions/
 // @match       https://www.amdgaming.com/promotions/*
+// @description Leave the bot running only close to 1 pm and close
 // @author      oGiu
 // @grant       none
 // @version     1.2
