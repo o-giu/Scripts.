@@ -4,11 +4,17 @@
 // @match       https://www.amdgaming.com/promotions
 // @match       https://www.amdgaming.com/promotions/
 // @match       https://www.amdgaming.com/promotions/*
-// @description Leave the bot running only close to 1 pm and close
+// @description Automatically collects new keys that appear
 // @author      oGiu
 // @grant       none
 // @version     1.2
 // ==/UserScript==
+
+/*
+ * ============================================================
+ *  Leave the bot running only close to 1 pm and close
+ * ============================================================
+ */
 
 (function () {
   'use strict';
