@@ -4,10 +4,9 @@
 // @match       https://www.amdgaming.com/promotions
 // @match       https://www.amdgaming.com/promotions/
 // @match       https://www.amdgaming.com/promotions/*
-// @description Automatically collects new keys that appear
 // @author      oGiu
 // @grant       none
-// @version     1.2
+// @version     1.3
 // ==/UserScript==
 
 /*
@@ -19,14 +18,22 @@
 (function () {
   'use strict';
 
-  const CLAIM_SELECTOR   = '.promotion-claim-key-btn';
-  const KEY_COUNT_SEL    = '.promotion-key-count';
-  const STORAGE_KEY      = 'amd_claimed_promos';
-  const REFRESH_INTERVAL = 10;
+  const CLAIM_SELECTOR = '.promotion-claim-key-btn';
+  const KEY_COUNT_SEL  = '.promotion-key-count';
+  const STORAGE_KEY    = 'amd_claimed_promos';
+  const BACKOFF_KEY    = 'amd_backoff_level';
+  const MIN_REFRESH    = 30;
+  const MAX_REFRESH    = 60;
+  const BASE_BACKOFF   = 60;
+  const MAX_BACKOFF    = 900;
 
   let countdownInterval = null;
   let hudKeepAliveInterval = null;
-  let countdown = REFRESH_INTERVAL;
+  let countdown = 0;
+
+  function rand(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
 
   function getClaimed() {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
@@ -48,6 +55,21 @@
   function clearHistory() {
     localStorage.removeItem(STORAGE_KEY);
     location.reload();
+  }
+
+  function getBackoff() {
+    try { return parseInt(sessionStorage.getItem(BACKOFF_KEY) || '0', 10) || 0; }
+    catch { return 0; }
+  }
+
+  function setBackoff(level) {
+    try { sessionStorage.setItem(BACKOFF_KEY, String(level)); } catch {}
+  }
+
+  function isBlockedPage() {
+    const text = (document.body?.innerText || '').trim();
+    const probe = (document.title + ' ' + text.slice(0, 400)).toLowerCase();
+    return text.length < 800 && /403|forbidden|access denied|blocked/.test(probe);
   }
 
   function slugFromHref(href) {
@@ -94,20 +116,20 @@
     hud.id = HUD_ID;
 
     Object.assign(hud.style, {
-      position:        'fixed',
-      bottom:          '12px',
-      right:           '12px',
-      zIndex:          '2147483647',
-      background:      'rgba(0,0,0,0.95)',
-      color:           '#fff',
-      padding:         '12px 16px',
-      border:          `1px solid ${color}`,
-      fontFamily:      'monospace',
-      fontSize:        '12px',
-      borderRadius:    '8px',
-      lineHeight:      '1.7',
-      minWidth:        '220px',
-      pointerEvents:   'auto',
+      position:      'fixed',
+      bottom:        '12px',
+      right:         '12px',
+      zIndex:        '2147483647',
+      background:    'rgba(0,0,0,0.95)',
+      color:         '#fff',
+      padding:       '12px 16px',
+      border:        `1px solid ${color}`,
+      fontFamily:    'monospace',
+      fontSize:      '12px',
+      borderRadius:  '8px',
+      lineHeight:    '1.7',
+      minWidth:      '220px',
+      pointerEvents: 'auto',
     });
 
     hud.innerHTML =
@@ -127,8 +149,26 @@
     if (el) el.innerText = countdown;
   }
 
+  function runBlockedPage() {
+    const level = getBackoff() + 1;
+    setBackoff(level);
+    countdown = Math.min(BASE_BACKOFF * Math.pow(2, level - 1), MAX_BACKOFF) + rand(0, 20);
+
+    buildHUD({ status: 'BLOCKED (403) - BACKING OFF', color: '#ff3333', extra: `LEVEL: ${level}<br>` });
+
+    countdownInterval = setInterval(() => {
+      countdown--;
+      tickCountdown();
+      if (countdown <= 0) {
+        stopAllTimers();
+        window.location.href = 'https://www.amdgaming.com/promotions';
+      }
+    }, 1000);
+  }
+
   function runListPage(isHome = false) {
     const pageName = isHome ? 'HOME' : 'LISTING';
+    countdown = rand(MIN_REFRESH, MAX_REFRESH);
     buildHUD({ status: 'MONITORING', color: '#ff9900', extra: `PAGE: ${pageName}<br>` });
 
     hudKeepAliveInterval = setInterval(() => {
@@ -170,7 +210,7 @@
         setTimeout(() => {
           if (href) window.location.href = href;
           else dispatchClicks(link);
-        }, 800);
+        }, rand(1500, 3500));
         return;
       }
 
@@ -191,7 +231,7 @@
   function runPromoPage() {
     const slug = slugFromHref(window.location.pathname);
     let phase = 'waiting-button';
-    countdown = 15;
+    countdown = 20;
 
     buildHUD({ status: 'WAITING FOR EMBER', color: '#ffff00', extra: `PAGE: PROMO<br>SLUG: ${slug}<br>` });
 
@@ -213,7 +253,9 @@
       clearInterval(hudKeepAliveInterval);
       if (buttonObserver)  buttonObserver.disconnect();
       if (confirmObserver) confirmObserver.disconnect();
-      window.location.href = 'https://www.amdgaming.com/promotions';
+      setTimeout(() => {
+        window.location.href = 'https://www.amdgaming.com/promotions';
+      }, rand(1000, 3000));
     }
 
     buttonObserver = new MutationObserver(() => {
@@ -225,10 +267,12 @@
       phase = 'waiting-confirm';
 
       buildHUD({ status: 'CLICKING...', color: '#00ffff', extra: `SLUG: ${slug}<br>` });
-      dispatchClicks(btn);
 
-      countdown = 10;
-      startConfirmPhase();
+      setTimeout(() => {
+        dispatchClicks(btn);
+        countdown = 12;
+        startConfirmPhase();
+      }, rand(700, 1800));
     });
     buttonObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -250,11 +294,14 @@
         addClaimed(slug);
         buildHUD({ status: 'KEY CLAIMED!', color: '#00ff00', extra: `SLUG: ${slug}<br>` });
 
-        countdown = 5;
+        countdown = 6;
         confirmInterval = setInterval(() => {
           countdown--;
           tickCountdown();
-          if (countdown <= 0) goToListPage();
+          if (countdown <= 0) {
+            clearInterval(confirmInterval);
+            goToListPage();
+          }
         }, 1000);
       });
       confirmObserver.observe(document.body, { childList: true, subtree: true });
@@ -264,11 +311,19 @@
         tickCountdown();
         if (countdown <= 0) {
           confirmObserver.disconnect();
+          clearInterval(confirmInterval);
           goToListPage();
         }
       }, 1000);
     }
   }
+
+  if (isBlockedPage()) {
+    runBlockedPage();
+    return;
+  }
+
+  setBackoff(0);
 
   const path = window.location.pathname.replace(/\/$/, '');
 
